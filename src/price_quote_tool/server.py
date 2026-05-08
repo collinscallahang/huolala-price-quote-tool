@@ -79,7 +79,7 @@ def create_app():
             "output_root": str(output_dir),
         }
 
-    @app.post("/api/folder/select")
+    @app.api_route("/api/folder/select", methods=["GET", "POST"])
     def select_folder():
         try:
             selected = choose_folder_dialog()

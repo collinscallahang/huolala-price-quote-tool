@@ -107,6 +107,11 @@ main {
   width: 100%;
 }
 
+.pathControls button {
+  min-width: 72px;
+  white-space: nowrap;
+}
+
 .pathActions {
   margin: -6px 0 18px;
 }

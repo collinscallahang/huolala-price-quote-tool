@@ -19,6 +19,9 @@ function userMessage(rawMessage) {
   if (message.includes("BrowserType.launch_persistent_context") || message.includes("Target page, context or browser has been closed")) {
     return "专用 Edge 启动失败，请先关闭正在运行的专用 Edge 窗口后重试。";
   }
+  if (message === "Not Found" || message.includes("404")) {
+    return "当前后台服务还是旧版本，请关闭正在运行的启动窗口后，重新双击“打开查价工具网页.hta”。";
+  }
   if (message.includes("Timed out") || message.includes("Timeout")) {
     return "等待页面响应超时，请检查网页是否已打开并完成登录。";
   }
@@ -52,8 +55,11 @@ async function loadConfig() {
   const response = await fetch("/api/config");
   const config = await response.json();
   $("siteUrl").value = config.default_url || "";
-  $("inputDirPath").value = config.default_input_dir || "";
-  $("outputRootPath").value = config.output_root || "";
+  $("inputDirPath").value = config.default_input_dir || "input";
+  $("outputRootPath").value = config.output_root || "output";
+  if (!config.default_input_dir || !config.output_root) {
+    showNotice("当前后台服务可能还是旧版本，请关闭服务窗口后重新双击“打开查价工具网页.hta”。", "error");
+  }
   await loadInputFiles();
 }
 
@@ -82,6 +88,15 @@ async function postJson(url) {
   return response.json();
 }
 
+async function getJson(url) {
+  const response = await fetch(url);
+  if (!response.ok) {
+    const detail = await response.json().catch(() => ({}));
+    throw new Error(detail.detail || response.statusText);
+  }
+  return response.json();
+}
+
 function formDataBase() {
   const data = new FormData();
   data.append("site_url", $("siteUrl").value);
@@ -89,10 +104,26 @@ function formDataBase() {
 }
 
 async function chooseFolder(targetId) {
-  const result = await postJson("/api/folder/select");
-  if (result.path) {
-    $(targetId).value = result.path;
-    showNotice("已选择文件夹，保存后生效。");
+  try {
+    const result = await getJson("/api/folder/select");
+    if (result.path) {
+      $(targetId).value = result.path;
+      showNotice("已选择文件夹，保存后生效。");
+      return;
+    }
+  } catch (error) {
+    if (!String(error.message || "").includes("Not Found") && !String(error.message || "").includes("404")) {
+      showNotice(userMessage(error.message), "error");
+    }
+  }
+
+  const current = $(targetId).value || "";
+  const typedPath = window.prompt("请输入或粘贴文件夹完整路径，例如 D:\\批量查价工具\\input", current);
+  if (typedPath && typedPath.trim()) {
+    $(targetId).value = typedPath.trim();
+    showNotice("已填写文件夹路径，点击“保存目录设置”后生效。");
+  } else {
+    showNotice("没有选择文件夹。");
   }
 }
 
