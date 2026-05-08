@@ -196,7 +196,7 @@ def create_app():
     @app.get("/api/runs/{run_id}/files")
     def run_files(run_id: str):
         run = _get_run_or_404(run_id)
-        return {"files": [path.name for path in run.result_files()]}
+        return {"files": [path.name for path in run.download_files()]}
 
     @app.get("/api/runs/{run_id}/download/{filename}")
     def download_file(run_id: str, filename: str):

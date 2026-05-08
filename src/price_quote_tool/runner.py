@@ -16,6 +16,7 @@ from .site_config import load_site_config
 
 
 QuoteClientFactory = Callable[[], object]
+AUXILIARY_RESULT_FILES = ("失败明细.csv", "待确认地址.csv", "复制粘贴记录.csv")
 
 
 def configured_path(value: str | None, root_dir: Path, fallback: Path) -> Path:
@@ -142,6 +143,11 @@ class BatchRun:
     def result_files(self) -> list[Path]:
         return [job.summary.output_path for job in self.jobs if job.summary.output_path.exists()]
 
+    def download_files(self) -> list[Path]:
+        files = self.result_files()
+        files.extend(path for name in AUXILIARY_RESULT_FILES if (path := self.output_dir / name).exists())
+        return files
+
     def _default_quote_client_factory(self) -> ThreadedQuoteClient:
         return ThreadedQuoteClient(self.site_url, self.config, self.root_dir)
 
@@ -187,13 +193,14 @@ class BatchRun:
                 self.progress.status = status
                 self.progress.current_task = ""
                 self.progress.message = "运行结束"
-                self.progress.result_files = [str(path) for path in self.result_files()]
+                self.progress.result_files = [str(path) for path in self.download_files()]
             self._write_progress_snapshot()
         except Exception as exc:
             self._save_all(best_effort=True)
             with self._lock:
                 self.progress.status = "failed"
                 self.progress.message = str(exc)
+                self.progress.result_files = [str(path) for path in self.download_files()]
             self._write_progress_snapshot()
         finally:
             keep_browser_open = bool(self.config.get("keep_browser_open_after_run", False))

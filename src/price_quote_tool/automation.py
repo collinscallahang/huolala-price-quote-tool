@@ -428,16 +428,46 @@ class PlaywrightQuoteClient:
         except Exception:
             return False
 
+    def _fill_modal_textarea(self, modal: Any, value: str) -> None:
+        textarea = modal.locator("textarea").first
+        textarea.wait_for(state="visible", timeout=5000)
+        try:
+            textarea.fill(value, timeout=5000)
+            return
+        except Exception:
+            pass
+
+        ok = modal.evaluate(
+            r"""(modal, value) => {
+                const textarea = modal.querySelector("textarea");
+                if (!textarea) return false;
+                textarea.focus();
+                const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set;
+                setter.call(textarea, value);
+                textarea.dispatchEvent(new Event("input", { bubbles: true }));
+                textarea.dispatchEvent(new Event("change", { bubbles: true }));
+                return true;
+            }""",
+            value,
+        )
+        if not ok:
+            raise AutomationError("地址识别弹窗未找到地址输入框")
+
+    def _click_modal_button(self, modal: Any, text: str) -> None:
+        button = modal.get_by_text(text, exact=True)
+        try:
+            button.click(timeout=5000)
+        except Exception:
+            button.click(timeout=5000, force=True)
+
     def _recognize_route_address(self, badge_text: str, value: str) -> None:
         if not self._click_route_action_by_index(badge_text, "地址识别"):
             self._click_row_text(badge_text, "地址识别")
         timeout = int(self.config.get("timeouts_ms", {}).get("default", 10000))
         modal = self._page.locator(".ant-modal").filter(has_text="地址识别").last
         modal.wait_for(timeout=timeout)
-        textarea = modal.locator("textarea").first
-        textarea.click(timeout=3000)
-        textarea.fill(value, timeout=3000)
-        modal.get_by_text("确认", exact=True).click(timeout=3000)
+        self._fill_modal_textarea(modal, value)
+        self._click_modal_button(modal, "确认")
         try:
             modal.wait_for(state="hidden", timeout=timeout)
         except Exception:

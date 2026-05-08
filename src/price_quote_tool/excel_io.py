@@ -58,6 +58,8 @@ class WorkbookJob:
         if not result.success:
             if is_address_confirmation(result.error):
                 self.write_address_confirmation(result)
+            else:
+                self.write_failure(result)
             return
         task = self.task_for_result(result)
 
@@ -88,6 +90,15 @@ class WorkbookJob:
             return
         cell = self.worksheet.cell(result.row_index, target_col)
         note = address_confirmation_comment(result, task, cell.coordinate)
+        cell.comment = Comment(note, "查价工具")
+
+    def write_failure(self, result: QuoteResult) -> None:
+        task = self.task_for_result(result)
+        target_col = result.price_col or self.columns.get("distance")
+        if not target_col:
+            return
+        cell = self.worksheet.cell(result.row_index, target_col)
+        note = failure_comment(result, task, cell.coordinate)
         cell.comment = Comment(note, "查价工具")
 
 
@@ -318,6 +329,26 @@ def address_confirmation_comment(result: QuoteResult, task: QuoteTask | None, ce
             f"发货地址：{origin}",
             f"到货地址：{destination}",
             f"原因：{result.error}",
+            f"任务ID：{result.task_id}",
+        ]
+    )
+
+
+def failure_comment(result: QuoteResult, task: QuoteTask | None, cell_coordinate: str) -> str:
+    supplier = task.supplier_name if task else ""
+    origin = task.origin_address if task else ""
+    destination = task.destination_address if task else ""
+    vehicle = f"{task.vehicle_label} / {task.vehicle_type}" if task else ""
+    return "\n".join(
+        [
+            "查价失败",
+            f"写入单元格：{cell_coordinate}",
+            f"供应商：{supplier}",
+            f"车型：{vehicle}",
+            f"发货地址：{origin}",
+            f"到货地址：{destination}",
+            f"失败原因：{result.error or '未知错误'}",
+            f"重试次数：{result.attempts}",
             f"任务ID：{result.task_id}",
         ]
     )
