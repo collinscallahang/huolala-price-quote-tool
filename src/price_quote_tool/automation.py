@@ -426,51 +426,270 @@ class PlaywrightQuoteClient:
         except Exception:
             return False
 
-    def _fill_modal_textarea(self, modal: Any, value: str) -> None:
-        textarea = modal.locator("textarea").first
-        textarea.wait_for(state="visible", timeout=5000)
-        try:
-            textarea.fill(value, timeout=5000)
-            return
-        except Exception:
-            pass
-
-        ok = modal.evaluate(
-            r"""(modal, value) => {
+    def _modal_textarea_state(self, modal: Any) -> dict[str, Any]:
+        return modal.evaluate(
+            r"""modal => {
                 const textarea = modal.querySelector("textarea");
-                if (!textarea) return false;
-                textarea.focus();
-                const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set;
-                setter.call(textarea, value);
-                textarea.dispatchEvent(new Event("input", { bubbles: true }));
-                textarea.dispatchEvent(new Event("change", { bubbles: true }));
-                return true;
-            }""",
-            value,
+                if (!textarea) return { found: false, ready: false, value: "", rect: null };
+                const style = window.getComputedStyle(textarea);
+                const rect = textarea.getBoundingClientRect();
+                const ready = style.display !== "none" &&
+                    style.visibility !== "hidden" &&
+                    rect.width > 0 &&
+                    rect.height > 0 &&
+                    !textarea.disabled &&
+                    !textarea.readOnly;
+                return {
+                    found: true,
+                    ready,
+                    value: textarea.value || "",
+                    rect: {
+                        left: rect.left,
+                        top: rect.top,
+                        width: rect.width,
+                        height: rect.height
+                    }
+                };
+            }"""
         )
-        if not ok:
-            raise AutomationError("地址识别弹窗未找到地址输入框")
 
-    def _click_modal_button(self, modal: Any, text: str) -> None:
-        button = modal.get_by_text(text, exact=True)
+    def _wait_for_modal_textarea_ready(self, modal: Any, timeout_ms: int = 6000) -> None:
+        deadline = time.monotonic() + timeout_ms / 1000
+        previous_rect: dict[str, float] | None = None
+        stable_samples = 0
+        last_state: dict[str, Any] = {"found": False, "ready": False}
+        while time.monotonic() < deadline:
+            last_state = self._modal_textarea_state(modal)
+            rect = last_state.get("rect")
+            if last_state.get("ready") and rect:
+                if previous_rect and all(abs(float(rect[key]) - float(previous_rect[key])) <= 0.5 for key in rect):
+                    stable_samples += 1
+                else:
+                    stable_samples = 1
+                previous_rect = rect
+                if stable_samples >= 3:
+                    return
+            else:
+                stable_samples = 0
+                previous_rect = None
+            self._page.wait_for_timeout(120)
+        if not last_state.get("found"):
+            raise AutomationError("地址识别弹窗未找到地址输入框")
+        raise AutomationError("地址识别弹窗地址输入框一直未稳定")
+
+    def _modal_textarea_matches(self, modal: Any, value: str) -> bool:
+        return bool(
+            modal.evaluate(
+                r"""(modal, value) => {
+                    const textarea = modal.querySelector("textarea");
+                    return Boolean(textarea && textarea.value === value);
+                }""",
+                value,
+            )
+        )
+
+    def _wait_for_modal_textarea_value(self, modal: Any, value: str, timeout_ms: int = 2500) -> bool:
+        deadline = time.monotonic() + timeout_ms / 1000
+        while time.monotonic() < deadline:
+            if self._modal_textarea_matches(modal, value):
+                return True
+            self._page.wait_for_timeout(100)
+        return False
+
+    def _paste_modal_textarea_value(self, modal: Any, value: str) -> bool:
+        return bool(
+            modal.evaluate(
+                r"""(modal, value) => {
+                    const textarea = modal.querySelector("textarea");
+                    if (!textarea || textarea.disabled || textarea.readOnly) return false;
+                    const win = textarea.ownerDocument.defaultView || window;
+                    const setter = Object.getOwnPropertyDescriptor(win.HTMLTextAreaElement.prototype, "value")?.set;
+                    const setValue = text => {
+                        if (setter) {
+                            setter.call(textarea, text);
+                        } else {
+                            textarea.value = text;
+                        }
+                    };
+                    textarea.focus({ preventScroll: true });
+                    textarea.select();
+                    try {
+                        const data = new DataTransfer();
+                        data.setData("text/plain", value);
+                        textarea.dispatchEvent(new ClipboardEvent("paste", {
+                            bubbles: true,
+                            cancelable: true,
+                            clipboardData: data
+                        }));
+                    } catch (_error) {
+                        // Some browser builds do not allow constructing ClipboardEvent with data.
+                    }
+                    try {
+                        textarea.dispatchEvent(new InputEvent("beforeinput", {
+                            bubbles: true,
+                            cancelable: true,
+                            inputType: "insertFromPaste",
+                            data: value
+                        }));
+                    } catch (_error) {
+                    }
+                    setValue(value);
+                    textarea.dispatchEvent(new InputEvent("input", {
+                        bubbles: true,
+                        cancelable: true,
+                        inputType: "insertFromPaste",
+                        data: value
+                    }));
+                    textarea.dispatchEvent(new Event("change", { bubbles: true }));
+                    return textarea.value === value;
+                }""",
+                value,
+            )
+        )
+
+    def _keyboard_insert_modal_textarea_value(self, modal: Any, value: str) -> bool:
+        textarea = modal.locator("textarea").first
         try:
-            button.click(timeout=5000)
+            textarea.click(timeout=4000)
         except Exception:
-            button.click(timeout=5000, force=True)
+            focused = bool(
+                modal.evaluate(
+                    r"""modal => {
+                        const textarea = modal.querySelector("textarea");
+                        if (!textarea || textarea.disabled || textarea.readOnly) return false;
+                        textarea.focus({ preventScroll: true });
+                        return document.activeElement === textarea;
+                    }"""
+                )
+            )
+            if not focused:
+                return False
+        try:
+            self._page.keyboard.press("Control+A")
+            self._page.keyboard.press("Backspace")
+            self._page.wait_for_timeout(120)
+            self._page.keyboard.insert_text(value)
+            return True
+        except Exception:
+            return False
+
+    def _fill_modal_textarea(self, modal: Any, value: str) -> None:
+        modal.locator("textarea").first.wait_for(state="visible", timeout=5000)
+        for attempt in range(4):
+            self._wait_for_modal_textarea_ready(modal)
+            if self._paste_modal_textarea_value(modal, value):
+                self._page.wait_for_timeout(350)
+                if self._wait_for_modal_textarea_value(modal, value, timeout_ms=1500):
+                    self._page.wait_for_timeout(400)
+                    if self._modal_textarea_matches(modal, value):
+                        return
+            if self._keyboard_insert_modal_textarea_value(modal, value):
+                self._page.wait_for_timeout(350)
+                if self._wait_for_modal_textarea_value(modal, value, timeout_ms=1500):
+                    self._page.wait_for_timeout(400)
+                    if self._modal_textarea_matches(modal, value):
+                        return
+            self._page.wait_for_timeout(250 + attempt * 250)
+        raise AutomationError("地址识别弹窗地址写入后未生效")
+
+    def _modal_button_state(self, modal: Any, text: str, required_textarea_value: str | None = None) -> dict[str, Any]:
+        return modal.evaluate(
+            r"""(modal, payload) => {
+                const normalize = text => (text || "").replace(/\s+/g, "").trim();
+                const target = normalize(payload.text);
+                const buttons = [...modal.querySelectorAll("button")];
+                const button = buttons.find(item => normalize(item.innerText || item.textContent) === target);
+                const textarea = modal.querySelector("textarea");
+                const textareaValue = textarea ? textarea.value || "" : "";
+                const textareaMatches = payload.requiredValue == null || textareaValue === payload.requiredValue;
+                if (!button) return { found: false, disabled: true, textareaMatches, textareaValue };
+                const disabled = button.disabled ||
+                    button.getAttribute("aria-disabled") === "true" ||
+                    String(button.className || "").includes("disabled");
+                return { found: true, disabled, textareaMatches, textareaValue };
+            }""",
+            {"text": text, "requiredValue": required_textarea_value},
+        )
+
+    def _click_modal_button(self, modal: Any, text: str, required_textarea_value: str | None = None) -> None:
+        deadline = time.monotonic() + 10
+        ready_since: float | None = None
+        last_state: dict[str, Any] = {"found": False, "disabled": True, "textareaMatches": False}
+        while time.monotonic() < deadline:
+            last_state = self._modal_button_state(modal, text, required_textarea_value)
+            ready = (
+                last_state.get("found")
+                and not last_state.get("disabled")
+                and last_state.get("textareaMatches")
+            )
+            if ready:
+                if ready_since is None:
+                    ready_since = time.monotonic()
+                elif time.monotonic() - ready_since >= 0.5:
+                    break
+            else:
+                ready_since = None
+            self._page.wait_for_timeout(150)
+        if not last_state.get("found"):
+            raise AutomationError(f"地址识别弹窗未找到按钮：{text}")
+        if required_textarea_value is not None and not last_state.get("textareaMatches"):
+            raise AutomationError("地址识别弹窗地址尚未成功写入，已取消点击确认")
+        if last_state.get("disabled"):
+            raise AutomationError(f"地址识别弹窗按钮不可用：{text}")
+
+        button = modal.locator("button").filter(has_text=text).last
+        try:
+            button.scroll_into_view_if_needed(timeout=2000)
+            self._page.wait_for_timeout(200)
+            button.click(timeout=3000)
+        except Exception:
+            clicked = modal.evaluate(
+                r"""(modal, payload) => {
+                    const normalize = text => (text || "").replace(/\s+/g, "").trim();
+                    const target = normalize(payload.text);
+                    const textarea = modal.querySelector("textarea");
+                    if (payload.requiredValue != null && (!textarea || textarea.value !== payload.requiredValue)) {
+                        return false;
+                    }
+                    const button = [...modal.querySelectorAll("button")]
+                        .find(item => normalize(item.innerText || item.textContent) === target);
+                    if (!button || button.disabled || button.getAttribute("aria-disabled") === "true") return false;
+                    button.click();
+                    return true;
+                }""",
+                {"text": text, "requiredValue": required_textarea_value},
+            )
+            if not clicked:
+                raise
+
+    def _dismiss_modal(self, modal: Any, timeout: int = 3000) -> None:
+        try:
+            modal.locator(".ant-modal-close, button[aria-label='Close']").first.click(timeout=1000, force=True)
+        except Exception:
+            try:
+                self._page.keyboard.press("Escape")
+            except Exception:
+                return
+        try:
+            modal.wait_for(state="hidden", timeout=timeout)
+        except Exception:
+            self._page.wait_for_timeout(300)
 
     def _recognize_route_address(self, badge_text: str, value: str) -> None:
+        modal = None
         if not self._click_route_action_by_index(badge_text, "地址识别"):
             self._click_row_text(badge_text, "地址识别")
         timeout = int(self.config.get("timeouts_ms", {}).get("default", 10000))
         modal = self._page.locator(".ant-modal").filter(has_text="地址识别").last
-        modal.wait_for(timeout=timeout)
-        self._fill_modal_textarea(modal, value)
-        self._click_modal_button(modal, "确认")
         try:
+            modal.wait_for(timeout=timeout)
+            self._fill_modal_textarea(modal, value)
+            self._click_modal_button(modal, "确认", required_textarea_value=value)
             modal.wait_for(state="hidden", timeout=timeout)
         except Exception:
-            # Some Ant Design modals remain mounted briefly; wait for the overlay to stop blocking.
-            self._page.wait_for_timeout(1000)
+            if modal is not None:
+                self._dismiss_modal(modal)
+            raise
         self._resolve_accurate_address_modal(value, badge_text)
 
     def _resolve_accurate_address_modal(self, expected_address: str, badge_text: str) -> None:
