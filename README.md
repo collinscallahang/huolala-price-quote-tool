@@ -1,0 +1,54 @@
+# 便携 Python + Playwright 批量查价工具
+
+这个工具用于把 Excel 中的发货地址、到货地址和车型列批量提交到货拉拉企业版查价页，并把页面中的 **运费一口价** 和 **总里程** 写回新的 Excel。
+
+## 使用方式
+
+1. 双击 `启动查价工具.bat`。
+2. 浏览器打开 `http://127.0.0.1:8765`。
+3. 把要查价的 `.xlsx` 放到 `D:\auto_input\input`，例如 `样本 - F3.xlsx` 和 `样本 - F4.xlsx`。
+4. 输入货拉拉页面 URL：
+   `https://bfe-epc-web-v.huolala.cn/#/order-center/same-city?from=menu`
+5. 点击“打开专用 Edge”，在打开的 Edge 中完成登录或验证码。
+6. 回到控制页点击“使用 input 目录创建任务”，再点击“开始查价”。
+7. 结果文件会生成在 `D:\auto_input\output\<时间戳>\`。
+8. 运行结束后专用 Edge 会停留在最后一次查价页面，方便核对页面价格和 Excel 记录。
+
+控制页也保留手选 Excel 的方式。手选文件时，结果同样生成在 `D:\auto_input\output\<时间戳>\`。
+
+## Excel 约定
+
+- 默认读取第一个 Sheet。
+- 第 2 行必须包含 `供应商名称`、`发货地址`、`距离`、`到货地址`。
+- 第 1 行和第 2 行共同定义价格列，例如：
+  - 第 1 行：`厢式货车&飞翼门`
+  - 第 2 行：`9.6`、`12.5&13`、`16.5&17.5`
+- 工具只填空白的距离和价格单元格，已有值不会覆盖。
+- 原始 Excel 不会修改，每个输入文件都会生成同名 `_查价结果.xlsx` 副本。
+
+## 货拉拉网页读取规则
+
+- 用车时间和“快车”保持页面现状不变。
+- 价格读取页面中的 `运费一口价`，不会读取已优惠后的 `总计`。
+- 路程读取页面中的 `总里程...公里`。
+- 车型长度默认映射：
+  - `9.6` -> `9米6`
+  - `12.5&13` -> `13米`
+  - `16.5&17.5` -> `17米5`
+
+如果货拉拉页面控件 DOM 有变化，优先调整 `configs/site.huolala.json`。
+
+## 开发验证
+
+核心 Excel 测试不依赖 Playwright：
+
+```powershell
+python -m unittest discover -s tests
+```
+
+完整网页自动化需要安装依赖后运行：
+
+```powershell
+python -m pip install -r requirements.txt
+python -m playwright install msedge
+```

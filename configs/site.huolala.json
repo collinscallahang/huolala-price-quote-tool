@@ -1,0 +1,91 @@
+{
+  "name": "huolala-enterprise-same-city",
+  "default_url": "https://bfe-epc-web-v.huolala.cn/#/order-center/same-city?from=menu",
+  "default_input_dir": "D:\\auto_input\\input",
+  "output_root": "D:\\auto_input\\output",
+  "keep_browser_open_after_run": true,
+  "browser": {
+    "channel": "msedge",
+    "user_data_dir": "data/browser-profile",
+    "headless": false,
+    "ignore_https_errors": true,
+    "viewport": {
+      "width": 1440,
+      "height": 1000
+    }
+  },
+  "timeouts_ms": {
+    "default": 10000,
+    "navigation": 60000,
+    "after_address": 1200,
+    "after_vehicle": 800,
+    "after_calculate": 1500,
+    "address_choice": 3000,
+    "summary": 15000
+  },
+  "vehicle_length_mapping": {
+    "9.6": "9米6",
+    "9.60": "9米6",
+    "12.5&13": "13米",
+    "12.5": "13米",
+    "13": "13米",
+    "16.5&17.5": "17米5",
+    "17.5": "17米5"
+  },
+  "vehicle_requirement_mapping": {
+    "厢式货车": ["厢式货车"],
+    "飞翼车": ["飞翼车"],
+    "飞翼门": ["飞翼车"]
+  },
+  "workflow": [
+    {
+      "action": "goto"
+    },
+    {
+      "action": "recognize_route_address",
+      "badge_text": "发",
+      "value": "{origin_address}"
+    },
+    {
+      "action": "recognize_route_address",
+      "badge_text": "收",
+      "value": "{destination_address}"
+    },
+    {
+      "action": "wait",
+      "ms": 1200
+    },
+    {
+      "action": "click_vehicle_label",
+      "value": "{vehicle_label}"
+    },
+    {
+      "action": "ensure_vehicle_requirements",
+      "value": "{vehicle_type}"
+    },
+    {
+      "action": "wait",
+      "ms": 1500
+    },
+    {
+      "action": "ensure_service_option",
+      "value": "快车"
+    },
+    {
+      "action": "wait",
+      "ms": 1000
+    },
+    {
+      "action": "extract_huolala_summary"
+    }
+  ],
+  "extract": {
+    "price_patterns": [
+      "运费\\s*[—\\-－]?\\s*一口价\\s*([0-9,]+(?:\\.[0-9]+)?)\\s*元",
+      "一口价\\s*运费\\s*[—\\-－]?\\s*一口价\\s*([0-9,]+(?:\\.[0-9]+)?)\\s*元"
+    ],
+    "distance_patterns": [
+      "总里程\\s*([0-9,]+(?:\\.[0-9]+)?)\\s*公里"
+    ]
+  }
+}

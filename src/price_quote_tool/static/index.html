@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>批量查价工具</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <h1>批量查价工具</h1>
+        <p>读取 Excel，打开货拉拉企业版页面，批量回填运费一口价和总里程。</p>
+      </div>
+      <span id="serviceState" class="state">本地服务已连接</span>
+    </header>
+
+    <main>
+      <section class="panel">
+        <h2>任务设置</h2>
+        <div class="paths">
+          <div><span>输入目录</span><strong id="inputDir">-</strong></div>
+          <div><span>输出目录</span><strong id="outputRoot">-</strong></div>
+          <div><span>目录文件</span><strong id="inputFiles">-</strong></div>
+        </div>
+        <form id="runForm">
+          <label>
+            Excel 文件（可手选，也可直接使用输入目录）
+            <input id="files" name="files" type="file" accept=".xlsx" multiple />
+          </label>
+          <label>
+            查价网页 URL
+            <input id="siteUrl" name="site_url" type="url" required />
+          </label>
+          <label>
+            重试次数
+            <input id="retryCount" name="retry_count" type="number" min="1" max="10" value="2" />
+          </label>
+          <label class="inline">
+            <input id="overwrite" name="overwrite" type="checkbox" />
+            覆盖已有距离和价格
+          </label>
+          <div class="actions">
+            <button type="button" id="openBrowser">打开专用 Edge</button>
+            <button type="button" id="createFromInput">使用 input 目录创建任务</button>
+            <button type="submit" id="createRun">创建任务</button>
+            <button type="button" id="startRun" disabled>开始查价</button>
+            <button type="button" id="pauseRun" disabled>暂停</button>
+            <button type="button" id="resumeRun" disabled>继续</button>
+            <button type="button" id="stopRun" disabled>停止</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="panel">
+        <h2>运行进度</h2>
+        <div class="progressRow">
+          <progress id="progress" max="100" value="0"></progress>
+          <strong id="progressText">0 / 0</strong>
+        </div>
+        <dl class="stats">
+          <div><dt>状态</dt><dd id="status">未创建</dd></div>
+          <div><dt>成功</dt><dd id="successTasks">0</dd></div>
+          <div><dt>失败</dt><dd id="failedTasks">0</dd></div>
+          <div><dt>当前任务</dt><dd id="currentTask">-</dd></div>
+        </dl>
+        <p id="message" class="message"></p>
+      </section>
+
+      <section class="panel">
+        <h2>结果文件</h2>
+        <div id="downloads" class="downloads"></div>
+      </section>
+    </main>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>

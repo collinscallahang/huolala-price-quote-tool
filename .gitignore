@@ -1,0 +1,11 @@
+.venv/
+.tmp/
+.test_tmp/
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.log
+data/
+outputs/
+runtime/downloads/
+runtime/python/

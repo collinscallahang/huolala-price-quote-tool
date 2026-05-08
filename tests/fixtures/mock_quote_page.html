@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>模拟货拉拉查价页</title>
+    <style>
+      body { font-family: Arial, "Microsoft YaHei", sans-serif; padding: 32px; color: #172033; }
+      table { border-collapse: collapse; width: 900px; margin-top: 24px; }
+      td, th { border: 1px solid #d6deeb; padding: 12px; }
+      input { width: 320px; padding: 8px; }
+      label { margin-right: 18px; }
+      .badge { display: inline-block; width: 22px; height: 22px; line-height: 22px; text-align: center; color: #fff; border-radius: 4px; }
+      .send { background: #2b63d9; }
+      .recv { background: #fa7a22; }
+      .summary { margin-top: 32px; font-size: 22px; }
+    </style>
+  </head>
+  <body>
+    <h1>订单基础信息</h1>
+    <section>
+      <strong>车型选择</strong>
+      <label><input name="vehicle" type="radio" value="9米6" checked /> 9米6</label>
+      <label><input name="vehicle" type="radio" value="13米" /> 13米</label>
+      <label><input name="vehicle" type="radio" value="17米5" /> 17米5</label>
+    </section>
+    <section>
+      <strong>车型要求</strong>
+      <label><input type="checkbox" checked /> 厢式货车</label>
+      <label><input type="checkbox" /> 飞翼车</label>
+    </section>
+    <table>
+      <tr>
+        <th>顺序</th><th>地址</th><th>操作</th>
+      </tr>
+      <tr>
+        <td><span class="badge send">发</span></td>
+        <td><input id="origin" value="" placeholder="发货地址" /></td>
+        <td><button onclick="calculate()">地址识别</button></td>
+      </tr>
+      <tr>
+        <td><span class="badge recv">收</span></td>
+        <td><input id="destination" value="" placeholder="到货地址" /></td>
+        <td><button onclick="calculate()">地址识别</button></td>
+      </tr>
+    </table>
+    <section class="summary">
+      <p><span>运费一口价</span> <strong id="price">1072.64元</strong></p>
+      <p>总里程<span id="distance">145</span>公里</p>
+      <p>总计 <strong id="total">992.64元</strong></p>
+    </section>
+    <script>
+      function calculate() {
+        const vehicle = document.querySelector("input[name='vehicle']:checked").value;
+        const base = vehicle === "9米6" ? 1072.64 : vehicle === "13米" ? 1472.67 : 1731.53;
+        document.getElementById("price").textContent = base.toFixed(2) + "元";
+        document.getElementById("total").textContent = (base - 80).toFixed(2) + "元";
+        document.getElementById("distance").textContent = "145";
+      }
+      document.querySelectorAll("input[name='vehicle']").forEach((input) => input.addEventListener("change", calculate));
+      calculate();
+    </script>
+  </body>
+</html>
