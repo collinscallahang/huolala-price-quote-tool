@@ -2,6 +2,10 @@
 setlocal
 cd /d "%~dp0"
 
+if /I "%~1"=="--no-browser" (
+  set "PRICE_QUOTE_NO_BROWSER=1"
+)
+
 set "PYTHON_EXE=%~dp0runtime\python\python.exe"
 if not exist "%PYTHON_EXE%" (
   if exist "%~dp0.venv\Scripts\python.exe" (

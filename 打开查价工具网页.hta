@@ -1,0 +1,218 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="x-ua-compatible" content="IE=edge">
+  <title>批量查价工具</title>
+  <hta:application
+    id="PriceQuoteLauncher"
+    applicationname="批量查价工具"
+    border="thin"
+    caption="yes"
+    maximizebutton="no"
+    minimizebutton="yes"
+    scroll="no"
+    singleinstance="yes"
+    sysmenu="yes"
+    windowstate="normal" />
+  <style>
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      font-family: "Microsoft YaHei", "Segoe UI", Arial, sans-serif;
+      background: #f5f7fb;
+      color: #172033;
+    }
+    .page {
+      padding: 28px;
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: 24px;
+      font-weight: 700;
+    }
+    .sub {
+      margin: 0 0 22px;
+      color: #536172;
+      font-size: 14px;
+      line-height: 1.7;
+    }
+    .panel {
+      background: #fff;
+      border: 1px solid #dce4ef;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 8px 24px rgba(23, 32, 51, 0.08);
+    }
+    .status {
+      min-height: 52px;
+      padding: 14px 16px;
+      border-radius: 6px;
+      background: #eef4ff;
+      border: 1px solid #cbdaf7;
+      color: #24406f;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    .actions {
+      margin-top: 18px;
+    }
+    button {
+      height: 38px;
+      margin-right: 10px;
+      padding: 0 16px;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      background: #fff;
+      color: #243044;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    button.primary {
+      border-color: #2f63d7;
+      background: #2f63d7;
+      color: #fff;
+    }
+    .tips {
+      margin-top: 16px;
+      color: #64748b;
+      font-size: 13px;
+      line-height: 1.7;
+    }
+    .path {
+      font-family: Consolas, monospace;
+      color: #334155;
+    }
+  </style>
+  <script language="javascript">
+    var shell = new ActiveXObject("WScript.Shell");
+    var fso = new ActiveXObject("Scripting.FileSystemObject");
+    var rootDir = "";
+    var attempts = 0;
+    var knownPorts = [8765, 18765, 28765];
+
+    function setStatus(text) {
+      document.getElementById("status").innerHTML = text;
+    }
+
+    function launcherPath() {
+      var path = decodeURIComponent(location.pathname);
+      if (path.charAt(0) == "/" && path.charAt(2) == ":") {
+        path = path.substring(1);
+      }
+      return path.replace(/\//g, "\\");
+    }
+
+    function ensureFolders() {
+      var input = rootDir + "\\input";
+      var output = rootDir + "\\output";
+      if (!fso.FolderExists(input)) {
+        fso.CreateFolder(input);
+      }
+      if (!fso.FolderExists(output)) {
+        fso.CreateFolder(output);
+      }
+    }
+
+    function openFolder(name) {
+      var path = rootDir + "\\" + name;
+      if (!fso.FolderExists(path)) {
+        fso.CreateFolder(path);
+      }
+      shell.Run('explorer.exe "' + path + '"', 1, false);
+    }
+
+    function startTool() {
+      rootDir = fso.GetParentFolderName(launcherPath());
+      ensureFolders();
+      document.getElementById("rootPath").innerText = rootDir;
+
+      var bat = rootDir + "\\启动查价工具.bat";
+      if (!fso.FileExists(bat)) {
+        setStatus("没有找到启动脚本，请确认这个网页文件和“启动查价工具.bat”在同一个文件夹。");
+        return;
+      }
+
+      setStatus("正在启动本地查价服务，请稍等几秒。");
+      shell.Run('cmd /c start "批量查价工具" /min "' + bat + '" --no-browser', 0, false);
+      attempts = 0;
+      window.setTimeout(pollServer, 1200);
+    }
+
+    function readServerUrlFile() {
+      var file = rootDir + "\\outputs\\server_url.txt";
+      if (!fso.FileExists(file)) {
+        return "";
+      }
+      var stream = fso.OpenTextFile(file, 1, false, -1);
+      var text = stream.ReadAll();
+      stream.Close();
+      return text.replace(/^\s+|\s+$/g, "");
+    }
+
+    function isAlive(url) {
+      try {
+        var xhr = new ActiveXObject("MSXML2.XMLHTTP");
+        xhr.open("GET", url + "/api/config?t=" + new Date().getTime(), false);
+        xhr.send();
+        return xhr.status >= 200 && xhr.status < 500;
+      } catch (e) {
+        return false;
+      }
+    }
+
+    function openControl(url) {
+      setStatus("查价服务已启动，正在打开控制页：<br><span class='path'>" + url + "</span>");
+      shell.Run(url, 1, false);
+    }
+
+    function pollServer() {
+      attempts++;
+      var savedUrl = readServerUrlFile();
+      if (savedUrl && isAlive(savedUrl)) {
+        openControl(savedUrl);
+        return;
+      }
+
+      for (var i = 0; i < knownPorts.length; i++) {
+        var url = "http://127.0.0.1:" + knownPorts[i];
+        if (isAlive(url)) {
+          openControl(url);
+          return;
+        }
+      }
+
+      if (attempts < 45) {
+        setStatus("正在等待本地服务启动...<br>如果这是第一次运行，初始化会稍慢一点。");
+        window.setTimeout(pollServer, 1000);
+      } else {
+        setStatus("还没有检测到服务。请查看是否有安全软件拦截，或双击“启动查价工具.bat”查看错误信息。");
+      }
+    }
+
+    window.onload = function () {
+      window.resizeTo(660, 430);
+      startTool();
+    };
+  </script>
+</head>
+<body>
+  <div class="page">
+    <h1>批量查价工具</h1>
+    <p class="sub">双击这个网页入口后，会自动启动本地服务并打开查价控制页。</p>
+    <div class="panel">
+      <div id="status" class="status">准备启动。</div>
+      <div class="actions">
+        <button class="primary" onclick="startTool()">重新启动并打开网页</button>
+        <button onclick="openFolder('input')">打开 input</button>
+        <button onclick="openFolder('output')">打开 output</button>
+      </div>
+      <div class="tips">
+        Excel 放入 <span class="path">input</span> 文件夹；查价结果生成到 <span class="path">output</span> 文件夹。<br>
+        当前工具目录：<span id="rootPath" class="path"></span>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

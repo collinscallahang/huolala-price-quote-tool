@@ -10,7 +10,7 @@
     <header class="topbar">
       <div>
         <h1>批量查价工具</h1>
-        <p>读取 Excel，打开货拉拉企业版页面，批量回填运费一口价和总里程。</p>
+        <p>打开网页后直接选择 Excel，批量回填运费一口价和总里程。</p>
       </div>
       <span id="serviceState" class="state">本地服务已连接</span>
     </header>
@@ -19,13 +19,13 @@
       <section class="panel">
         <h2>任务设置</h2>
         <div class="paths">
-          <div><span>输入目录</span><strong id="inputDir">-</strong></div>
+          <div><span>备用 input 目录</span><strong id="inputDir">-</strong></div>
           <div><span>输出目录</span><strong id="outputRoot">-</strong></div>
-          <div><span>目录文件</span><strong id="inputFiles">-</strong></div>
+          <div><span>备用目录文件</span><strong id="inputFiles">-</strong></div>
         </div>
         <form id="runForm">
           <label>
-            Excel 文件（可手选，也可直接使用输入目录）
+            选择 Excel 文件
             <input id="files" name="files" type="file" accept=".xlsx" multiple />
           </label>
           <label>
@@ -42,8 +42,8 @@
           </label>
           <div class="actions">
             <button type="button" id="openBrowser">打开专用 Edge</button>
-            <button type="button" id="createFromInput">使用 input 目录创建任务</button>
-            <button type="submit" id="createRun">创建任务</button>
+            <button type="submit" id="createRun">用所选 Excel 创建任务</button>
+            <button type="button" id="createFromInput">使用 input 目录（备用）</button>
             <button type="button" id="startRun" disabled>开始查价</button>
             <button type="button" id="pauseRun" disabled>暂停</button>
             <button type="button" id="resumeRun" disabled>继续</button>

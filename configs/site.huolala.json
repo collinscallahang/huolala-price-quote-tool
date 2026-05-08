@@ -1,8 +1,8 @@
 {
   "name": "huolala-enterprise-same-city",
   "default_url": "https://bfe-epc-web-v.huolala.cn/#/order-center/same-city?from=menu",
-  "default_input_dir": "D:\\auto_input\\input",
-  "output_root": "D:\\auto_input\\output",
+  "default_input_dir": "input",
+  "output_root": "output",
   "keep_browser_open_after_run": true,
   "browser": {
     "channel": "msedge",

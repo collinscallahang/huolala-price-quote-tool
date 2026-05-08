@@ -102,7 +102,7 @@ $("runForm").addEventListener("submit", async (event) => {
   try {
     const data = formDataBase();
     if (!$("files").files.length) {
-      throw new Error("请先选择 Excel 文件，或点击“使用 input 目录创建任务”。");
+      throw new Error("请先在网页里选择一个或多个 Excel 文件。input 目录只是备用入口。");
     }
     for (const file of $("files").files) {
       data.append("files", file);
@@ -115,6 +115,11 @@ $("runForm").addEventListener("submit", async (event) => {
   } catch (error) {
     $("message").textContent = error.message;
   }
+});
+
+$("files").addEventListener("change", () => {
+  const files = Array.from($("files").files || []).map((file) => file.name);
+  $("message").textContent = files.length ? `已选择 ${files.length} 个 Excel：${files.join("、")}` : "";
 });
 
 $("createFromInput").addEventListener("click", async () => {
