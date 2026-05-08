@@ -12,7 +12,18 @@ from .models import QuoteResult, QuoteTask
 from .site_config import render_template, vehicle_requirement_labels_for
 
 
+def normalize_address_for_match(value: str) -> str:
+    text = re.sub(r"\s+", "", str(value or ""))
+    text = re.sub(r"(选择|确认)$", "", text)
+    text = text.replace("，", ",").replace("（", "(").replace("）", ")")
+    return text.strip().lower()
+
+
 class AutomationError(RuntimeError):
+    pass
+
+
+class AddressConfirmationRequired(AutomationError):
     pass
 
 
@@ -432,9 +443,9 @@ class PlaywrightQuoteClient:
         except Exception:
             # Some Ant Design modals remain mounted briefly; wait for the overlay to stop blocking.
             self._page.wait_for_timeout(1000)
-        self._resolve_accurate_address_modal()
+        self._resolve_accurate_address_modal(value, badge_text)
 
-    def _resolve_accurate_address_modal(self) -> None:
+    def _resolve_accurate_address_modal(self, expected_address: str, badge_text: str) -> None:
         timeout = int(self.config.get("timeouts_ms", {}).get("address_choice", 3000))
         modal = self._page.locator(".ant-modal").filter(has_text="选择准确地址").last
         try:
@@ -442,26 +453,60 @@ class PlaywrightQuoteClient:
         except Exception:
             return
 
+        expected = normalize_address_for_match(expected_address)
+        candidates: list[str] = []
         try:
-            modal.evaluate(
+            candidates = modal.evaluate(
                 r"""modal => {
                     const normalize = value => (value || "").replace(/\s+/g, " ").trim();
                     const body = modal.querySelector(".ant-modal-body") || modal;
-                    const candidates = [...body.querySelectorAll("li, .ant-list-item, [class*='item'], [class*='address'], [class*='option'], div")]
+                    const elements = [...body.querySelectorAll("li, .ant-list-item, [class*='item'], [class*='address'], [class*='option'], div")]
                         .filter(element => {
                             const text = normalize(element.innerText || element.textContent);
                             const rect = element.getBoundingClientRect();
                             return text && !text.includes("选择准确地址") && rect.width > 20 && rect.height > 10;
                         });
-                    const first = candidates[0];
-                    if (first) {
-                        first.scrollIntoView({block: "center", inline: "nearest"});
-                        first.click();
-                    }
+                    const seen = new Set();
+                    return elements
+                        .map(element => normalize(element.innerText || element.textContent))
+                        .filter(text => {
+                            if (seen.has(text)) return false;
+                            seen.add(text);
+                            return true;
+                        });
                 }"""
             )
         except Exception:
-            pass
+            candidates = []
+
+        matched_text = next((text for text in candidates if normalize_address_for_match(text) == expected), "")
+        if not matched_text:
+            choices = "；".join(candidates[:3]) if candidates else "未读取到候选地址"
+            raise AddressConfirmationRequired(
+                f"地址需人工确认：{badge_text} 地址「{expected_address}」未找到完全一致候选。候选：{choices}"
+            )
+
+        clicked = False
+        try:
+            clicked = bool(
+                modal.evaluate(
+                    r"""(modal, matchedText) => {
+                        const normalize = value => (value || "").replace(/\s+/g, " ").trim();
+                        const body = modal.querySelector(".ant-modal-body") || modal;
+                        const elements = [...body.querySelectorAll("li, .ant-list-item, [class*='item'], [class*='address'], [class*='option'], div")];
+                        const found = elements.find(element => normalize(element.innerText || element.textContent) === matchedText);
+                        if (!found) return false;
+                        found.scrollIntoView({block: "center", inline: "nearest"});
+                        found.click();
+                        return true;
+                    }""",
+                    matched_text,
+                )
+            )
+        except Exception:
+            clicked = False
+        if not clicked:
+            raise AddressConfirmationRequired(f"地址需人工确认：{badge_text} 地址「{expected_address}」无法自动选中完全一致候选")
 
         modal.get_by_text("选择", exact=True).click(timeout=3000)
         try:

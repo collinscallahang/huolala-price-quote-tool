@@ -11,7 +11,34 @@ function showNotice(message, type = "") {
     notice.textContent = message || "";
     notice.className = `notice ${message ? "show" : ""} ${type}`.trim();
   }
-  $("message").textContent = message || "";
+}
+
+function userMessage(rawMessage) {
+  const message = String(rawMessage || "").trim();
+  if (!message) return "";
+  if (message.includes("BrowserType.launch_persistent_context") || message.includes("Target page, context or browser has been closed")) {
+    return "专用 Edge 启动失败，请先关闭正在运行的专用 Edge 窗口后重试。";
+  }
+  if (message.includes("Timed out") || message.includes("Timeout")) {
+    return "等待页面响应超时，请检查网页是否已打开并完成登录。";
+  }
+  if (message.includes("地址需人工确认")) {
+    return message.split(/\r?\n/)[0];
+  }
+  return message.split(/\r?\n/)[0].slice(0, 120);
+}
+
+function displayStatus(status) {
+  const labels = {
+    created: "已创建",
+    running: "运行中",
+    paused: "已暂停",
+    stopping: "正在停止",
+    stopped: "已停止",
+    completed: "已完成",
+    failed: "失败",
+  };
+  return labels[status] || status || "未知";
 }
 
 function setBusy(buttonId, busy) {
@@ -25,8 +52,8 @@ async function loadConfig() {
   const response = await fetch("/api/config");
   const config = await response.json();
   $("siteUrl").value = config.default_url || "";
-  $("inputDir").textContent = config.default_input_dir || "-";
-  $("outputRoot").textContent = config.output_root || "-";
+  $("inputDirPath").value = config.default_input_dir || "";
+  $("outputRootPath").value = config.output_root || "";
   await loadInputFiles();
 }
 
@@ -61,6 +88,25 @@ function formDataBase() {
   return data;
 }
 
+async function chooseFolder(targetId) {
+  const result = await postJson("/api/folder/select");
+  if (result.path) {
+    $(targetId).value = result.path;
+    showNotice("已选择文件夹，保存后生效。");
+  }
+}
+
+async function savePathSettings() {
+  const data = new FormData();
+  data.append("default_input_dir", $("inputDirPath").value.trim());
+  data.append("output_root", $("outputRootPath").value.trim());
+  const result = await postForm("/api/config/paths", data);
+  $("inputDirPath").value = result.default_input_dir || $("inputDirPath").value;
+  $("outputRootPath").value = result.output_root || $("outputRootPath").value;
+  await loadInputFiles();
+  showNotice(result.message || "目录设置已保存。", "success");
+}
+
 function updateButtons(status) {
   const hasRun = Boolean(state.runId);
   $("startRun").disabled = !hasRun || ["running", "completed", "stopped"].includes(status);
@@ -72,11 +118,11 @@ function updateButtons(status) {
 function renderStatus(data) {
   const total = data.total_tasks || 0;
   const completed = data.completed_tasks || 0;
-  $("status").textContent = data.status || "未知";
+  $("status").textContent = displayStatus(data.status);
   $("successTasks").textContent = data.success_tasks || 0;
   $("failedTasks").textContent = data.failed_tasks || 0;
   $("currentTask").textContent = data.current_task || "-";
-  $("message").textContent = data.message || "";
+  $("message").textContent = userMessage(data.message);
   $("progressText").textContent = `${completed} / ${total}`;
   $("progress").value = total ? Math.round((completed / total) * 100) : 0;
   updateButtons(data.status);
@@ -111,7 +157,7 @@ $("openBrowser").addEventListener("click", async () => {
     const result = await postForm("/api/browser/open", data);
     showNotice(result.message || "专用 Edge 已打开。", "success");
   } catch (error) {
-    showNotice(`打开专用 Edge 失败：${error.message}`, "error");
+    showNotice(userMessage(error.message), "error");
   } finally {
     setBusy("openBrowser", false);
   }
@@ -136,7 +182,7 @@ $("runForm").addEventListener("submit", async (event) => {
     renderStatus(result);
     showNotice(`任务已创建，共 ${result.total_tasks || 0} 个查价项。`, "success");
   } catch (error) {
-    showNotice(error.message, "error");
+    showNotice(userMessage(error.message), "error");
   } finally {
     setBusy("createRun", false);
   }
@@ -147,10 +193,57 @@ $("files").addEventListener("change", () => {
   showNotice(files.length ? `已选择 ${files.length} 个 Excel：${files.join("、")}` : "");
 });
 
+$("chooseInputDir").addEventListener("click", async () => {
+  setBusy("chooseInputDir", true);
+  try {
+    await chooseFolder("inputDirPath");
+  } catch (error) {
+    showNotice(userMessage(error.message), "error");
+  } finally {
+    setBusy("chooseInputDir", false);
+  }
+});
+
+$("chooseOutputRoot").addEventListener("click", async () => {
+  setBusy("chooseOutputRoot", true);
+  try {
+    await chooseFolder("outputRootPath");
+  } catch (error) {
+    showNotice(userMessage(error.message), "error");
+  } finally {
+    setBusy("chooseOutputRoot", false);
+  }
+});
+
+$("savePaths").addEventListener("click", async () => {
+  setBusy("savePaths", true);
+  showNotice("正在保存目录设置。");
+  try {
+    await savePathSettings();
+  } catch (error) {
+    showNotice(userMessage(error.message), "error");
+  } finally {
+    setBusy("savePaths", false);
+  }
+});
+
+$("refreshInputFiles").addEventListener("click", async () => {
+  setBusy("refreshInputFiles", true);
+  try {
+    await loadInputFiles();
+    showNotice("备用目录文件已刷新。", "success");
+  } catch (error) {
+    showNotice(userMessage(error.message), "error");
+  } finally {
+    setBusy("refreshInputFiles", false);
+  }
+});
+
 $("createFromInput").addEventListener("click", async () => {
   setBusy("createFromInput", true);
-  showNotice("正在读取 input 目录并创建任务。");
+  showNotice("正在保存目录并读取备用 input 目录。");
   try {
+    await savePathSettings();
     const data = formDataBase();
     data.append("retry_count", $("retryCount").value || "2");
     data.append("overwrite", $("overwrite").checked ? "true" : "false");
@@ -159,7 +252,7 @@ $("createFromInput").addEventListener("click", async () => {
     renderStatus(result);
     showNotice(`任务已创建，共 ${result.total_tasks || 0} 个查价项。`, "success");
   } catch (error) {
-    showNotice(error.message, "error");
+    showNotice(userMessage(error.message), "error");
   } finally {
     setBusy("createFromInput", false);
   }
@@ -175,7 +268,7 @@ $("startRun").addEventListener("click", async () => {
       state.timer = setInterval(pollStatus, 1000);
     }
   } catch (error) {
-    showNotice(error.message, "error");
+    showNotice(userMessage(error.message), "error");
   }
 });
 
@@ -184,7 +277,7 @@ $("pauseRun").addEventListener("click", async () => {
     renderStatus(await postJson(`/api/runs/${state.runId}/pause`));
     showNotice("已暂停。");
   } catch (error) {
-    showNotice(error.message, "error");
+    showNotice(userMessage(error.message), "error");
   }
 });
 $("resumeRun").addEventListener("click", async () => {
@@ -192,7 +285,7 @@ $("resumeRun").addEventListener("click", async () => {
     renderStatus(await postJson(`/api/runs/${state.runId}/resume`));
     showNotice("已继续。");
   } catch (error) {
-    showNotice(error.message, "error");
+    showNotice(userMessage(error.message), "error");
   }
 });
 $("stopRun").addEventListener("click", async () => {
@@ -200,11 +293,11 @@ $("stopRun").addEventListener("click", async () => {
     renderStatus(await postJson(`/api/runs/${state.runId}/stop`));
     showNotice("正在停止。");
   } catch (error) {
-    showNotice(error.message, "error");
+    showNotice(userMessage(error.message), "error");
   }
 });
 
 loadConfig().catch((error) => {
   $("serviceState").textContent = "配置读取失败";
-  showNotice(error.message, "error");
+  showNotice(userMessage(error.message), "error");
 });

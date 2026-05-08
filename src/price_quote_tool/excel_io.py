@@ -56,6 +56,8 @@ class WorkbookJob:
 
     def write_result(self, result: QuoteResult) -> None:
         if not result.success:
+            if is_address_confirmation(result.error):
+                self.write_address_confirmation(result)
             return
         task = self.task_for_result(result)
 
@@ -78,6 +80,15 @@ class WorkbookJob:
 
     def task_for_result(self, result: QuoteResult) -> QuoteTask | None:
         return next((task for task in self.summary.tasks if task.task_id == result.task_id), None)
+
+    def write_address_confirmation(self, result: QuoteResult) -> None:
+        task = self.task_for_result(result)
+        target_col = result.price_col or self.columns.get("distance")
+        if not target_col:
+            return
+        cell = self.worksheet.cell(result.row_index, target_col)
+        note = address_confirmation_comment(result, task, cell.coordinate)
+        cell.comment = Comment(note, "查价工具")
 
 
 def build_workbook_job(
@@ -287,6 +298,27 @@ def copy_comment(
             f"来源文本：{source_text or page_field}",
             f"任务ID：{result.task_id}",
             f"复制时间：{result.copied_at}",
+        ]
+    )
+
+
+def is_address_confirmation(error: str) -> bool:
+    return str(error or "").startswith("地址需人工确认")
+
+
+def address_confirmation_comment(result: QuoteResult, task: QuoteTask | None, cell_coordinate: str) -> str:
+    supplier = task.supplier_name if task else ""
+    origin = task.origin_address if task else ""
+    destination = task.destination_address if task else ""
+    return "\n".join(
+        [
+            "地址需人工确认",
+            f"写入单元格：{cell_coordinate}",
+            f"供应商：{supplier}",
+            f"发货地址：{origin}",
+            f"到货地址：{destination}",
+            f"原因：{result.error}",
+            f"任务ID：{result.task_id}",
         ]
     )
 

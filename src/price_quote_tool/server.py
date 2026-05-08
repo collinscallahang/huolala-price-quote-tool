@@ -7,7 +7,7 @@ from pathlib import Path
 
 from .automation import ThreadedQuoteClient
 from .runner import RunManager, configured_path
-from .site_config import load_site_config
+from .site_config import load_site_config, save_site_config
 
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
@@ -55,6 +55,38 @@ def create_app():
             "output_root": str(output_root),
         }
 
+    @app.post("/api/config/paths")
+    def update_config_paths(
+        default_input_dir: str = Form(...),
+        output_root: str = Form(...),
+    ):
+        input_dir = configured_path(default_input_dir, ROOT_DIR, ROOT_DIR / "input")
+        output_dir = configured_path(output_root, ROOT_DIR, ROOT_DIR / "output")
+        try:
+            input_dir.mkdir(parents=True, exist_ok=True)
+            output_dir.mkdir(parents=True, exist_ok=True)
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=f"目录创建失败：{exc}") from exc
+
+        config = load_site_config(CONFIG_PATH)
+        config["default_input_dir"] = str(input_dir)
+        config["output_root"] = str(output_dir)
+        save_site_config(CONFIG_PATH, config)
+        return {
+            "ok": True,
+            "message": "目录设置已保存",
+            "default_input_dir": str(input_dir),
+            "output_root": str(output_dir),
+        }
+
+    @app.post("/api/folder/select")
+    def select_folder():
+        try:
+            selected = choose_folder_dialog()
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"无法打开文件夹选择窗口：{exc}") from exc
+        return {"path": selected}
+
     @app.get("/api/input-files")
     def input_files():
         input_dir = _configured_input_dir()
@@ -79,7 +111,7 @@ def create_app():
             preview_browser.open()
         except Exception as exc:
             preview_browser = None
-            raise HTTPException(status_code=500, detail=f"打开专用 Edge 失败：{exc}") from exc
+            raise HTTPException(status_code=500, detail=browser_error_message(exc)) from exc
         return {"ok": True, "message": "专用 Edge 已打开，请完成登录后回到控制页开始查价"}
 
     @app.post("/api/runs")
@@ -188,6 +220,29 @@ def create_app():
 
 
 app = create_app()
+
+
+def browser_error_message(exc: Exception) -> str:
+    text = str(exc)
+    if "BrowserType.launch_persistent_context" in text or "Target page, context or browser has been closed" in text:
+        return "专用 Edge 启动失败，请先关闭正在运行的专用 Edge 窗口后重试。"
+    if "Timeout" in text or "Timed out" in text:
+        return "打开网页超时，请检查查价网址是否可访问，并确认登录页面没有卡住。"
+    return f"打开专用 Edge 失败：{text.splitlines()[0][:120]}"
+
+
+def choose_folder_dialog() -> str:
+    import tkinter as tk
+    from tkinter import filedialog
+
+    root = tk.Tk()
+    root.withdraw()
+    root.attributes("-topmost", True)
+    try:
+        selected = filedialog.askdirectory(title="选择文件夹")
+    finally:
+        root.destroy()
+    return selected or ""
 
 
 def choose_port() -> int:

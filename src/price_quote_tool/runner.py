@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Callable
 
 from .automation import ThreadedQuoteClient
-from .excel_io import build_workbook_job, cell_name
+from .excel_io import build_workbook_job, cell_name, is_address_confirmation
 from .models import QuoteResult, QuoteTask
 from .site_config import load_site_config
 
@@ -156,6 +156,9 @@ class BatchRun:
             client = self._quote_client_factory()
             if hasattr(client, "open"):
                 client.open()
+            with self._lock:
+                self.progress.message = "浏览器已就绪，准备开始查价"
+            self._write_progress_snapshot()
 
             for row_tasks in self._task_groups():
                 if self._stop.is_set():
@@ -166,6 +169,7 @@ class BatchRun:
                     self.progress.status = "running"
                     labels = "、".join(task.vehicle_label for task in row_tasks)
                     self.progress.current_task = f"{first_task.source_file} 第 {first_task.row_index} 行 {labels}"
+                    self.progress.message = f"正在处理第 {first_task.row_index} 行：识别地址并读取报价"
                 self._write_progress_snapshot()
 
                 if hasattr(client, "quote_row"):
@@ -330,6 +334,40 @@ class BatchRun:
                         "price_col": result.price_col or "",
                         "attempts": result.attempts,
                         "error": result.error,
+                    }
+                )
+        self._write_address_confirmations(failures)
+
+    def _write_address_confirmations(self, failures: list[QuoteResult]) -> None:
+        confirmations = [result for result in failures if is_address_confirmation(result.error)]
+        if not confirmations:
+            return
+        path = self.output_dir / "待确认地址.csv"
+        with path.open("w", newline="", encoding="utf-8-sig") as f:
+            writer = csv.DictWriter(
+                f,
+                fieldnames=["文件", "供应商", "Excel行", "发货地址", "到货地址", "价格列", "原因", "任务ID"],
+            )
+            writer.writeheader()
+            seen: set[tuple[str, int, str]] = set()
+            for result in confirmations:
+                task = self._task_lookup.get(result.task_id)
+                if not task:
+                    continue
+                key = (task.file_id, task.row_index, result.error)
+                if key in seen:
+                    continue
+                seen.add(key)
+                writer.writerow(
+                    {
+                        "文件": task.source_file,
+                        "供应商": task.supplier_name,
+                        "Excel行": task.row_index,
+                        "发货地址": task.origin_address,
+                        "到货地址": task.destination_address,
+                        "价格列": cell_name(result.row_index, result.price_col),
+                        "原因": result.error,
+                        "任务ID": result.task_id,
                     }
                 )
 

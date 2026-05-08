@@ -72,6 +72,27 @@ class RowFakeQuoteClient:
         return results
 
 
+class AddressConfirmationFakeClient:
+    def open(self) -> None:
+        pass
+
+    def close(self) -> None:
+        pass
+
+    def quote_row(self, tasks):
+        return [
+            QuoteResult(
+                task_id=task.task_id,
+                file_id=task.file_id,
+                row_index=task.row_index,
+                price_col=task.price_col,
+                success=False,
+                error="地址需人工确认：收 地址未找到完全一致候选",
+            )
+            for task in tasks
+        ]
+
+
 class RunnerTests(unittest.TestCase):
     def test_batch_run_writes_one_output_per_input(self) -> None:
         root = make_case_dir()
@@ -169,6 +190,52 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual([result_ws.cell(3, col).value for col in (5, 6, 7)], [100, 200, 300])
         self.assertIsNotNone(result_ws.cell(3, 5).comment)
         self.assertTrue((run.output_dir / "复制粘贴记录.csv").exists())
+
+    def test_address_confirmation_writes_excel_note_and_csv(self) -> None:
+        root = make_case_dir()
+        config_dir = root / "configs"
+        config_dir.mkdir()
+        config = config_dir / "site.huolala.json"
+        output_root = root / "configured_output"
+        config.write_text(
+            json.dumps(
+                {
+                    "vehicle_length_mapping": {"9.6": "9米6"},
+                    "output_root": str(output_root),
+                    "workflow": [],
+                    "extract": {},
+                    "browser": {},
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        sample = root / "样本.xlsx"
+        wb = Workbook()
+        ws = wb.active
+        ws.append([None, None, None, None, "厢式货车&飞翼门", None])
+        ws.append([None, "供应商名称", "发货地址", "距离", 9.6, "到货地址"])
+        ws.append([None, "供应商A", "合肥A路1号", None, None, "滁州B路2号"])
+        wb.save(sample)
+
+        run = BatchRun(
+            run_id="confirm_test",
+            excel_paths=[sample],
+            site_url="http://example.test",
+            retry_count=1,
+            root_dir=root,
+            config_path=config,
+            quote_client_factory=AddressConfirmationFakeClient,
+        )
+        run._run()
+
+        self.assertEqual(run.progress.status, "completed")
+        self.assertEqual(run.progress.failed_tasks, 1)
+        self.assertTrue((run.output_dir / "待确认地址.csv").exists())
+        result_wb = load_workbook(run.result_files()[0], data_only=True)
+        result_ws = result_wb.active
+        self.assertIsNone(result_ws.cell(3, 5).value)
+        self.assertIn("地址需人工确认", result_ws.cell(3, 5).comment.text)
 
 
 if __name__ == "__main__":

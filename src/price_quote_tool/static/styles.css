@@ -73,7 +73,7 @@ main {
   margin-bottom: 18px;
 }
 
-.paths div {
+.paths > div {
   min-width: 0;
   padding: 12px;
   border: 1px solid #edf0f5;
@@ -81,7 +81,8 @@ main {
   background: #fafbfd;
 }
 
-.paths span {
+.paths span,
+.pathEditor label {
   display: block;
   margin-bottom: 6px;
   color: #657085;
@@ -94,6 +95,28 @@ main {
   color: #172033;
   font-size: 14px;
   font-weight: 600;
+}
+
+.pathControls {
+  display: flex;
+  gap: 8px;
+}
+
+.pathControls input {
+  min-width: 0;
+  width: 100%;
+}
+
+.pathActions {
+  margin: -6px 0 18px;
+}
+
+.pathFiles {
+  position: relative;
+}
+
+.pathFiles strong {
+  padding-right: 64px;
 }
 
 form {
@@ -174,6 +197,21 @@ button {
   color: #ffffff;
   font: inherit;
   cursor: pointer;
+}
+
+button.secondary {
+  border-color: #cfd7e6;
+  background: #ffffff;
+  color: #1d5bcf;
+}
+
+button.small {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  min-height: 30px;
+  padding: 0 10px;
+  font-size: 13px;
 }
 
 button:disabled {

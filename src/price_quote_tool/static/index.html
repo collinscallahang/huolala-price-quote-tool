@@ -19,9 +19,28 @@
       <section class="panel">
         <h2>任务设置</h2>
         <div class="paths">
-          <div><span>备用 input 目录</span><strong id="inputDir">-</strong></div>
-          <div><span>输出目录</span><strong id="outputRoot">-</strong></div>
-          <div><span>备用目录文件</span><strong id="inputFiles">-</strong></div>
+          <div class="pathEditor">
+            <label for="inputDirPath">备用 input 目录</label>
+            <div class="pathControls">
+              <input id="inputDirPath" type="text" />
+              <button type="button" id="chooseInputDir" class="secondary">选择</button>
+            </div>
+          </div>
+          <div class="pathEditor">
+            <label for="outputRootPath">输出目录</label>
+            <div class="pathControls">
+              <input id="outputRootPath" type="text" />
+              <button type="button" id="chooseOutputRoot" class="secondary">选择</button>
+            </div>
+          </div>
+          <div class="pathFiles">
+            <span>备用目录文件</span>
+            <strong id="inputFiles">-</strong>
+            <button type="button" id="refreshInputFiles" class="secondary small">刷新</button>
+          </div>
+        </div>
+        <div class="pathActions">
+          <button type="button" id="savePaths" class="secondary">保存目录设置</button>
         </div>
         <form id="runForm">
           <label>
@@ -74,6 +93,6 @@
       </section>
     </main>
 
-    <script src="/static/app.js?v=20260508-action-feedback"></script>
+    <script src="/static/app.js?v=20260508-path-settings"></script>
   </body>
 </html>

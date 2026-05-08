@@ -31,6 +31,14 @@ def load_site_config(path: str | Path) -> dict[str, Any]:
         return json.load(f)
 
 
+def save_site_config(path: str | Path, config: dict[str, Any]) -> None:
+    config_path = Path(path)
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    with config_path.open("w", encoding="utf-8") as f:
+        json.dump(config, f, ensure_ascii=False, indent=2)
+        f.write("\n")
+
+
 def normalize_text(value: Any) -> str:
     if value is None:
         return ""
