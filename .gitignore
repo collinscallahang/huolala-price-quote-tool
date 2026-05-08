@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.test_tmp_*/
+tmp*/
+probe*.xlsx
+py_probe.txt
+test_write_probe.txt
+build/
+dist/
+logs/
+simulation_output/
+*.spec
