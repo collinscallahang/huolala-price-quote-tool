@@ -137,6 +137,34 @@ input {
   gap: 10px;
 }
 
+.notice {
+  grid-column: 1 / -1;
+  display: none;
+  min-height: 42px;
+  padding: 12px 14px;
+  border: 1px solid #cfd7e6;
+  border-radius: 6px;
+  background: #f8fafc;
+  color: #334155;
+  line-height: 1.5;
+}
+
+.notice.show {
+  display: block;
+}
+
+.notice.error {
+  border-color: #fecaca;
+  background: #fff1f2;
+  color: #b42318;
+}
+
+.notice.success {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+  color: #166534;
+}
+
 button {
   min-height: 40px;
   border: 1px solid #2b63d9;

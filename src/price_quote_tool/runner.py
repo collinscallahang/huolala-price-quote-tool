@@ -9,7 +9,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable
 
-from .automation import PlaywrightQuoteClient
+from .automation import ThreadedQuoteClient
 from .excel_io import build_workbook_job, cell_name
 from .models import QuoteResult, QuoteTask
 from .site_config import load_site_config
@@ -142,8 +142,8 @@ class BatchRun:
     def result_files(self) -> list[Path]:
         return [job.summary.output_path for job in self.jobs if job.summary.output_path.exists()]
 
-    def _default_quote_client_factory(self) -> PlaywrightQuoteClient:
-        return PlaywrightQuoteClient(self.site_url, self.config, self.root_dir)
+    def _default_quote_client_factory(self) -> ThreadedQuoteClient:
+        return ThreadedQuoteClient(self.site_url, self.config, self.root_dir)
 
     def _run(self) -> None:
         client = None

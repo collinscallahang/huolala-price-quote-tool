@@ -5,7 +5,7 @@ import webbrowser
 from datetime import datetime
 from pathlib import Path
 
-from .automation import PlaywrightQuoteClient
+from .automation import ThreadedQuoteClient
 from .runner import RunManager, configured_path
 from .site_config import load_site_config
 
@@ -16,7 +16,7 @@ UPLOAD_DIR = ROOT_DIR / "data" / "uploads"
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 manager = RunManager(ROOT_DIR, CONFIG_PATH)
-preview_browser: PlaywrightQuoteClient | None = None
+preview_browser: ThreadedQuoteClient | None = None
 
 
 def create_app():
@@ -31,6 +31,13 @@ def create_app():
 
     app = FastAPI(title="批量查价工具")
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+    @app.middleware("http")
+    async def no_cache_for_local_ui(request, call_next):
+        response = await call_next(request)
+        if request.url.path == "/" or request.url.path.startswith("/static/"):
+            response.headers["Cache-Control"] = "no-store"
+        return response
 
     @app.get("/", response_class=HTMLResponse)
     def index():
@@ -67,7 +74,7 @@ def create_app():
             finally:
                 preview_browser = None
         config = load_site_config(CONFIG_PATH)
-        preview_browser = PlaywrightQuoteClient(site_url or config.get("default_url", ""), config, ROOT_DIR)
+        preview_browser = ThreadedQuoteClient(site_url or config.get("default_url", ""), config, ROOT_DIR)
         try:
             preview_browser.open()
         except Exception as exc:

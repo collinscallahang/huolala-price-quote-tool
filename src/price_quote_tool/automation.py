@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import re
+import queue
+import threading
 import time
 from datetime import datetime
 from pathlib import Path
@@ -12,6 +14,73 @@ from .site_config import render_template, vehicle_requirement_labels_for
 
 class AutomationError(RuntimeError):
     pass
+
+
+class ThreadedQuoteClient:
+    """Run Playwright's sync API on a dedicated thread.
+
+    FastAPI may execute handlers while an asyncio loop is active. Playwright's
+    sync API refuses that context, so all browser work is funneled through a
+    plain worker thread.
+    """
+
+    def __init__(self, site_url: str, config: dict[str, Any], root_dir: str | Path):
+        self.site_url = site_url
+        self.config = config
+        self.root_dir = root_dir
+        self._requests: queue.Queue[tuple[str, tuple[Any, ...], dict[str, Any], queue.Queue]] = queue.Queue()
+        self._closed = False
+        self._thread = threading.Thread(target=self._worker, name="playwright-quote-client", daemon=True)
+        self._thread.start()
+
+    def open(self) -> None:
+        return self._call("open")
+
+    def quote(self, task: QuoteTask) -> QuoteResult:
+        return self._call("quote", task)
+
+    def quote_row(self, tasks: list[QuoteTask]) -> list[QuoteResult]:
+        return self._call("quote_row", tasks)
+
+    def close(self) -> None:
+        if self._closed:
+            return
+        self._closed = True
+        result_queue: queue.Queue = queue.Queue(maxsize=1)
+        self._requests.put(("__close__", (), {}, result_queue))
+        status, payload = result_queue.get()
+        self._thread.join(timeout=10)
+        if status == "error":
+            raise payload
+
+    def _call(self, method: str, *args: Any, **kwargs: Any) -> Any:
+        if self._closed:
+            raise AutomationError("浏览器客户端已关闭")
+        result_queue: queue.Queue = queue.Queue(maxsize=1)
+        self._requests.put((method, args, kwargs, result_queue))
+        status, payload = result_queue.get()
+        if status == "error":
+            raise payload
+        return payload
+
+    def _worker(self) -> None:
+        client: PlaywrightQuoteClient | None = None
+        while True:
+            method, args, kwargs, result_queue = self._requests.get()
+            if method == "__close__":
+                try:
+                    if client:
+                        client.close()
+                    result_queue.put(("ok", None))
+                except Exception as exc:
+                    result_queue.put(("error", exc))
+                return
+            try:
+                if client is None:
+                    client = PlaywrightQuoteClient(self.site_url, self.config, self.root_dir)
+                result_queue.put(("ok", getattr(client, method)(*args, **kwargs)))
+            except Exception as exc:
+                result_queue.put(("error", exc))
 
 
 class PlaywrightQuoteClient:
