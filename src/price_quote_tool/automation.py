@@ -195,8 +195,6 @@ class PlaywrightQuoteClient:
                 self._click_vehicle_label(task.vehicle_label)
                 self._ensure_vehicle_requirements(task.vehicle_type)
                 self._page.wait_for_timeout(int(self.config.get("timeouts_ms", {}).get("after_vehicle", 800)))
-                self._ensure_service_option("快车")
-                self._page.wait_for_timeout(1000)
                 extracted = self._extract_huolala_summary()
                 if task.needs_price and extracted.get("price") is None:
                     raise AutomationError("未读取到运费一口价")
@@ -674,46 +672,68 @@ class PlaywrightQuoteClient:
                 self._page.wait_for_timeout(150)
 
     def _ensure_service_option(self, service_name: str) -> None:
-        point = self._page.evaluate(
-            r"""serviceName => {
-                const normalize = value => (value || "").replace(/\s+/g, "").trim();
-                const isVisible = element => {
-                    const style = window.getComputedStyle(element);
-                    const rect = element.getBoundingClientRect();
-                    return style.visibility !== "hidden" &&
-                        style.display !== "none" &&
-                        rect.width > 0 &&
-                        rect.height > 0;
-                };
-                const target = normalize(serviceName);
-                const titleElements = [...document.querySelectorAll("*")]
-                    .filter(isVisible)
-                    .filter(element => normalize(element.innerText || element.textContent) === target);
+        timeout_ms = int(self.config.get("timeouts_ms", {}).get("service_option", 20000))
+        deadline = time.monotonic() + timeout_ms / 1000
+        last_state = ""
+        while True:
+            state = self._page.evaluate(
+                r"""serviceName => {
+                    const normalize = value => (value || "").replace(/\s+/g, "").trim();
+                    const isVisible = element => {
+                        const style = window.getComputedStyle(element);
+                        const rect = element.getBoundingClientRect();
+                        return style.visibility !== "hidden" &&
+                            style.display !== "none" &&
+                            rect.width > 0 &&
+                            rect.height > 0;
+                    };
+                    const target = normalize(serviceName);
+                    const bodyText = normalize(document.body.innerText || document.body.textContent || "");
+                    const titleElements = [...document.querySelectorAll("*")]
+                        .filter(isVisible)
+                        .filter(element => normalize(element.innerText || element.textContent) === target);
 
-                for (const title of titleElements) {
-                    let node = title;
-                    for (let depth = 0; node && depth < 8; depth += 1, node = node.parentElement) {
-                        const text = normalize(node.innerText || node.textContent);
-                        if (!text.includes(target) || !text.includes("一口价")) continue;
-                        if (text.includes("订单中心") || text.includes("货运路线")) continue;
-                        const rect = node.getBoundingClientRect();
-                        if (rect.width < 80 || rect.height < 50) continue;
-                        node.scrollIntoView({block: "center", inline: "center"});
-                        const nextRect = node.getBoundingClientRect();
-                        return {
-                            x: nextRect.left + nextRect.width / 2,
-                            y: nextRect.top + nextRect.height / 2,
-                        };
+                    for (const title of titleElements) {
+                        let node = title;
+                        for (let depth = 0; node && depth < 8; depth += 1, node = node.parentElement) {
+                            const text = normalize(node.innerText || node.textContent);
+                            if (!text.includes(target) || !text.includes("一口价")) continue;
+                            if (text.includes("订单中心") || text.includes("货运路线")) continue;
+                            const rect = node.getBoundingClientRect();
+                            if (rect.width < 80 || rect.height < 50) continue;
+                            node.scrollIntoView({block: "center", inline: "center"});
+                            const nextRect = node.getBoundingClientRect();
+                            return {
+                                status: "found",
+                                x: nextRect.left + nextRect.width / 2,
+                                y: nextRect.top + nextRect.height / 2,
+                            };
+                        }
                     }
-                }
-                return null;
-            }""",
-            service_name,
-        )
-        if not point:
-            raise AutomationError(f"未找到服务选项：{service_name}")
-        self._page.mouse.click(float(point["x"]), float(point["y"]))
-        self._page.wait_for_timeout(800)
+                    if (bodyText.includes("运费一口价") || bodyText.includes("一口价")) {
+                        return {status: "priced"};
+                    }
+                    if (bodyText.includes("计价中")) {
+                        return {status: "pricing"};
+                    }
+                    return {status: "missing"};
+                }""",
+                service_name,
+            )
+            last_state = str(state.get("status") or "")
+            if last_state == "found":
+                self._page.mouse.click(float(state["x"]), float(state["y"]))
+                self._page.wait_for_timeout(800)
+                return
+            if last_state == "priced":
+                # Some routes do not expose a separate service card after pricing; keep the quoted default.
+                return
+            if time.monotonic() >= deadline:
+                break
+            self._page.wait_for_timeout(500)
+        if last_state == "pricing":
+            raise AutomationError(f"地址已识别，但等待{service_name}报价超时")
+        raise AutomationError(f"地址已识别，但未找到服务选项：{service_name}")
 
     def _extract_huolala_summary(self) -> dict[str, Any]:
         timeout_ms = int(self.config.get("timeouts_ms", {}).get("summary", 15000))

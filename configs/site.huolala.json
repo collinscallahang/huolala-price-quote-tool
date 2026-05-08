@@ -21,6 +21,7 @@
     "after_vehicle": 800,
     "after_calculate": 1500,
     "address_choice": 3000,
+    "service_option": 20000,
     "summary": 15000
   },
   "vehicle_length_mapping": {
@@ -66,14 +67,6 @@
     {
       "action": "wait",
       "ms": 1500
-    },
-    {
-      "action": "ensure_service_option",
-      "value": "快车"
-    },
-    {
-      "action": "wait",
-      "ms": 1000
     },
     {
       "action": "extract_huolala_summary"
