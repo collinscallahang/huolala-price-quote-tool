@@ -187,7 +187,7 @@ def choose_port() -> int:
     env_port = os.environ.get("PRICE_QUOTE_PORT")
     if env_port:
         return int(env_port)
-    for port in (8765, 18765, 28765):
+    for port in (18765, 8765, 28765):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
             try:
                 sock.bind(("127.0.0.1", port))
