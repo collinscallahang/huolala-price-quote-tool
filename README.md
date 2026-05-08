@@ -6,7 +6,7 @@
 
 ### 普通用户：只下载一个启动脚本
 
-如果只是使用工具，不要下载 GitHub 的源码 ZIP。让使用者只下载这个文件：
+使用者只下载这个文件：
 
 [一键启动查价工具.bat](https://raw.githubusercontent.com/collinscallahang/huolala-price-quote-tool/main/%E4%B8%80%E9%94%AE%E5%90%AF%E5%8A%A8%E6%9F%A5%E4%BB%B7%E5%B7%A5%E5%85%B7.bat)
 
@@ -15,8 +15,6 @@
 如果浏览器打开的是代码文本，不是下载文件，请在 GitHub 文件页点击右上角 `Download raw file`，或者右键上面的链接选择“链接另存为”。
 
 ### 已经有便携包：双击网页入口
-
-如果你拿到的是完整便携包，推荐在本机双击工具目录里的：
 
 ```text
 打开查价工具网页.hta
