@@ -54,6 +54,7 @@ function setBusy(buttonId, busy) {
 async function loadConfig() {
   const response = await fetch("/api/config");
   const config = await response.json();
+  $("serviceState").textContent = `本地服务已连接${config.app_version ? ` · v${config.app_version}` : ""}`;
   $("siteUrl").value = config.default_url || "";
   $("inputDirPath").value = config.default_input_dir || "input";
   $("outputRootPath").value = config.output_root || "output";

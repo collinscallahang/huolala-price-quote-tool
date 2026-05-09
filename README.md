@@ -4,15 +4,15 @@
 
 ## 网页入口
 
-### 普通用户：只下载一个启动脚本
+### 普通用户：只下载一个启动器
 
 使用者只下载这个文件：
 
-[一键启动查价工具.bat](https://raw.githubusercontent.com/collinscallahang/huolala-price-quote-tool/main/%E4%B8%80%E9%94%AE%E5%90%AF%E5%8A%A8%E6%9F%A5%E4%BB%B7%E5%B7%A5%E5%85%B7.bat)
+[HuolalaPriceQuoteTool.exe](https://github.com/collinscallahang/huolala-price-quote-tool/raw/main/HuolalaPriceQuoteTool.exe)
 
-下载后双击它即可。第一次运行会自动下载便携运行包，解压到当前 Windows 用户目录，然后启动本地服务并打开查价网页。
+下载后双击它即可。启动器会自动检查最新版本；第一次运行会下载便携运行包，后续有新版本时会自动更新，然后启动本地服务并打开查价网页。
 
-如果浏览器打开的是代码文本，不是下载文件，请在 GitHub 文件页点击右上角 `Download raw file`，或者右键上面的链接选择“链接另存为”。
+如果浏览器没有自动下载，请在 GitHub 文件页点击右上角 `Download raw file`，或者右键上面的链接选择“链接另存为”。
 
 ### 已经有便携包：双击网页入口
 
@@ -90,7 +90,7 @@
 核心 Excel 测试不依赖 Playwright：
 
 ```powershell
-python -m unittest discover -s tests
+$env:PYTHONPATH='src'; python -m unittest discover -s tests
 ```
 
 完整网页自动化需要安装依赖后运行：
@@ -99,3 +99,5 @@ python -m unittest discover -s tests
 python -m pip install -r requirements.txt
 python -m playwright install msedge
 ```
+
+发布前的用户交付流程见 `docs/USER_DELIVERY_WORKFLOW.md`。

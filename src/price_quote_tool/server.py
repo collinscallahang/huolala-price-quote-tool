@@ -14,6 +14,7 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 CONFIG_PATH = ROOT_DIR / "configs" / "site.huolala.json"
 UPLOAD_DIR = ROOT_DIR / "data" / "uploads"
 STATIC_DIR = Path(__file__).resolve().parent / "static"
+VERSION_PATH = ROOT_DIR / "VERSION"
 
 manager = RunManager(ROOT_DIR, CONFIG_PATH)
 preview_browser: ThreadedQuoteClient | None = None
@@ -49,6 +50,7 @@ def create_app():
         input_dir = configured_path(config.get("default_input_dir"), ROOT_DIR, ROOT_DIR)
         output_root = configured_path(config.get("output_root"), ROOT_DIR, ROOT_DIR / "outputs" / "runs")
         return {
+            "app_version": read_app_version(),
             "default_url": config.get("default_url"),
             "config_name": config.get("name"),
             "default_input_dir": str(input_dir),
@@ -220,6 +222,14 @@ def create_app():
 
 
 app = create_app()
+
+
+def read_app_version() -> str:
+    try:
+        version = VERSION_PATH.read_text(encoding="utf-8").strip()
+    except OSError:
+        return "dev"
+    return version or "dev"
 
 
 def browser_error_message(exc: Exception) -> str:
